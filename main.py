@@ -1,15 +1,14 @@
 from abc import ABC, abstractmethod
-import cryptography
+from cryptography.hazmat.primitives.asymmetric import rsa, ec
+from cryptography.hazmat.primitives import serialization 
 import os
 from PIL import Image
 from typing import Any
 
-with open("config.env", "r") as f:
-    config = f.read()
 
 class Cipher(ABC):
     @abstractmethod
-    def encrypt(self, message: str, key: Any) -> Any:
+    def encrypt(self, text: str, key: Any) -> Any:
         pass
     
     @abstractmethod
@@ -18,64 +17,64 @@ class Cipher(ABC):
     
     @abstractmethod
     def validate_key(self, key: Any) -> bool:
-        pass
-
-class AbstractCipher(Cipher):
-    def validate_key(self, key: Any) -> bool:
         return True
+
 
 class KeyManager:
     def generate_RSA_keys(self):
-        return {f"private_key": "{private_key}", "public_key": "{public_key}"} 
+        private_key = rsa.generate_private_key(
+            public_exponent=65537,
+            key_size=2048,
+            backend=None
+        )
+        public_key = private_key.public_key()
+        return private_key, public_key
     def generate_ECC_keys(self):
-        return {f"private_key": "{private_key}", "public_key": "{public_key}"}
-    
+        private_key = ec.generate_private_key(
+            ec.SECP256R1(),
+            backend=None
+        )
+        public_key = private_key.public_key()
+        return private_key, public_key
 
-class CipherRSA(AbstractCipher):
+class CipherRSA(Cipher):
 
-    def encrypt(self, message: str, public_key: int) -> bytes:
+    def encrypt(self, text: str, public_key: rsa.RSAPublicKey) -> bytes:
         return
 
-    def decrypt(self, ciphertext: bytes, private_key: int) -> str:
+    def decrypt(self, ciphertext: bytes, private_key: rsa.RSAPrivateKey) -> str:
         return
 
+    def validate_key(self, key: Any) -> bool:
+        return isinstance(key, rsa.RSAPublicKey) or isinstance(key, rsa.RSAPrivateKey)
 
-class CipherECC(AbstractCipher):
-    def __init__(self, message):
-        super().__init__(message)
-        self.keys = KeyManager().generate_ECC_keys()
 
-    def encrypt(self, message: str, public_key: str) -> bytes:
+class CipherECC(Cipher):
+
+    def encrypt(self, text: str, public_key: ec.ECPublicKey) -> bytes:
         return
 
-    def decrypt(self, ciphertext: bytes, private_key: str) -> str:
+    def decrypt(self, ciphertext: bytes, private_key: ec.ECPrivateKey) -> str:
         return
 
-    def generate_keys(self):
-        return
-    
+    def validate_key(self, key: Any) -> bool:
+        return isinstance(key, ec.EllipticCurvePublicKey) or isinstance(key, ec.EllipticCurvePrivateKey)
 
 class CaesarCipher(Cipher):
-    def __init__(self, message: str, shift: int):
-        super().__init__(message)
-        self.shift = shift
 
-    def encrypt(self, message: str, key: int) -> str:
+    def encrypt(self, text: str, key: int) -> str:
         return
 
     def decrypt(self, ciphertext: str, key: int) -> str:
         return
 
-    def validate_key(self) -> bool:
-        return
+    def validate_key(self, key: int) -> bool:
+        return isinstance(key, int)
 
 
 class VigenereCipher(Cipher):
-    def __init__(self, message: str, key: str):
-        super().__init__(message)
-        self.key = key
 
-    def encrypt(self, message: str, key: str) -> str:
+    def encrypt(self, text: str, key: str) -> str:
         return
 
     def decrypt(self, ciphertext: str, key: str) -> str:
@@ -85,22 +84,20 @@ class VigenereCipher(Cipher):
         return
 
 
-class Base64Cipher(AbstractCipher):
-    def __init__(self, message: str):
-        super().__init__(message)
+class Base64Cipher(Cipher):
+    def encrypt(self, text: str, key: Any) -> str:
+        return
+    def decrypt(self, ciphertext: str, key: Any) -> str:
+        return
+    def validate_key(self, key: Any) -> bool:
+        return key is None
+    
 
-    def encrypt(self, message: str) -> str:
-        return
-    def decrypt(self, ciphertext: str) -> str:
-        return
 class SteganographyCipher(Cipher):
-    def __init__(self, message: str, image_path: str):
-        super().__init__(message)
-        self.image_path = image_path
+    def encrypt(self, text: str, key: str) -> str:
+        return
+    def decrypt(self, ciphertext: str, key: str) -> str:
+        return
+    def validate_key(self, key: str) -> bool:
+        return isinstance(key, str)
 
-    def encrypt(self, message: str, image_path: str) -> str:
-        return
-    def decrypt(self, ciphertext: str, image_path: str) -> str:
-        return
-    def validate_key(self) -> bool:
-        return
