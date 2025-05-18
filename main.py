@@ -1,3 +1,4 @@
+from abc import abstractmethod
 import cryptography
 import os 
 import math
@@ -8,39 +9,21 @@ with open("config.env", "r") as f:
 
 
 class AbstractCipher:
-
-    def __init__(self, message):
-        self.message = message
-    
-    def generate_keys(self):
-        raise NotImplementedError("Subclasses must implement this method")
-
-    def validate_key(self, key):
-        raise NotImplementedError("Subclasses must implement this method")
-
-    def encrypt(self):
-        raise NotImplementedError("Subclasses must implement this method")
-
-    def decrypt(self):
-        raise NotImplementedError("Subclasses must implement this method")
-    
-    def validate_key(self, key):
-        raise NotImplementedError("Subclasses must implement this method")
-
-class CipherRSA(AbstractCipher):
-    def __init__(self, message):
-        super().__init__(message)
-
+    @abstractmethod
     def encrypt(self, message):
-        return
+        raise NotImplementedError("Subclasses must implement this method")
 
+    @abstractmethod
     def decrypt(self, ciphertext):
-        return
-    
-    def generate_keys(self):
-        return
+            raise NotImplementedError("Subclasses must implement this method")
 
-class CipherECC(AbstractCipher):
+class KeyManager:
+    @abstractmethod
+    def generate_keys(self):
+        raise NotImplementedError("Subclasses must implement this method")
+    
+
+class CipherRSA(AbstractCipher, KeyManager):
     def __init__(self, message):
         super().__init__(message)
 
@@ -52,6 +35,20 @@ class CipherECC(AbstractCipher):
 
     def generate_keys(self):
         return
+
+class CipherECC(AbstractCipher, KeyManager):
+    def __init__(self, message):
+        super().__init__(message)
+
+    def encrypt(self, message):
+        return
+
+    def decrypt(self, ciphertext):
+        return
+
+    def generate_keys(self):
+        return
+    
 
 class CaesarCipher(AbstractCipher):
     def __init__(self, message, shift):
@@ -60,10 +57,13 @@ class CaesarCipher(AbstractCipher):
 
     def encrypt(self):
         return
+    
     def decrypt(self):
         return
+    
     def validate_key(self):
         return
+    
     
 class VigenereCipher(AbstractCipher):
     def __init__(self, message, key):
@@ -77,6 +77,7 @@ class VigenereCipher(AbstractCipher):
     def validate_key(self):
         return
     
+    
 class Base64Cipher(AbstractCipher):
     def __init__(self, message):
         super().__init__(message)
@@ -85,8 +86,8 @@ class Base64Cipher(AbstractCipher):
         return
     def decrypt(self):
         return
-
-class StenographyCipher(AbstractCipher):
+    
+class SteganographyCipher(AbstractCipher):
     def __init__(self, message, image_path):
         super().__init__(message)
         self.image_path = image_path
