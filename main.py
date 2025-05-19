@@ -9,47 +9,44 @@ from typing import Any
 class Cipher(ABC):
     @abstractmethod
     def encrypt(self, text: str, key: Any) -> Any:
-        pass
+        raise NotImplementedError("This method should be overridden by subclasses")
     
     @abstractmethod
     def decrypt(self, ciphertext: Any, key: Any) -> str:
-        pass
+        raise NotImplementedError("This method should be overridden by subclasses")
     
     @abstractmethod
     def validate_key(self, key: Any) -> bool:
-        return True
+        raise NotImplementedError("This method should be overridden by subclasses")
 
+class AbstractCipher(Cipher):
+
+    def text_to_bytes(self, text: str) -> bytes:
+        return text.encode('utf-8')
+    
+    def bytes_to_text(self, data: bytes) -> str:
+        return data.decode('utf-8')
+    
 
 class KeyManager:
     def generate_RSA_keys(self):
-        private_key = rsa.generate_private_key(
-            public_exponent=65537,
-            key_size=2048,
-            backend=None
-        )
-        public_key = private_key.public_key()
         return private_key, public_key
     def generate_ECC_keys(self):
-        private_key = ec.generate_private_key(
-            ec.SECP256R1(),
-            backend=None
-        )
-        public_key = private_key.public_key()
         return private_key, public_key
 
-class CipherRSA(Cipher):
+class CipherRSA(AbstractCipher):
 
     def encrypt(self, text: str, public_key: rsa.RSAPublicKey) -> bytes:
         return
 
     def decrypt(self, ciphertext: bytes, private_key: rsa.RSAPrivateKey) -> str:
         return
-
+    
     def validate_key(self, key: Any) -> bool:
-        return isinstance(key, rsa.RSAPublicKey) or isinstance(key, rsa.RSAPrivateKey)
+        return isinstance(key, (rsa.RSAPublicKey, rsa.RSAPrivateKey))
 
 
-class CipherECC(Cipher):
+class CipherECC(AbstractCipher):
 
     def encrypt(self, text: str, public_key: ec.ECPublicKey) -> bytes:
         return
@@ -58,7 +55,8 @@ class CipherECC(Cipher):
         return
 
     def validate_key(self, key: Any) -> bool:
-        return isinstance(key, ec.EllipticCurvePublicKey) or isinstance(key, ec.EllipticCurvePrivateKey)
+        return isinstance(key, (ec.ECPublicKey, ec.ECPrivateKey))
+
 
 class CaesarCipher(Cipher):
 
@@ -68,8 +66,8 @@ class CaesarCipher(Cipher):
     def decrypt(self, ciphertext: str, key: int) -> str:
         return
 
-    def validate_key(self, key: int) -> bool:
-        return isinstance(key, int)
+    def validate_key(self, key: Any) -> bool:
+        return isinstance(key, int) and 1 <= key <= 25
 
 
 class VigenereCipher(Cipher):
@@ -80,24 +78,25 @@ class VigenereCipher(Cipher):
     def decrypt(self, ciphertext: str, key: str) -> str:
         return
 
-    def validate_key(self) -> bool:
-        return
+    def validate_key(self, key: Any) -> bool:
+        alphabet = "abcdefghijklmnopqrstuvwxyz"
+        return isinstance(key, str) and key and all(c.lower() in alphabet for c in key)
 
 
-class Base64Cipher(Cipher):
+class Base64Cipher(AbstractCipher):
     def encrypt(self, text: str, key: Any) -> str:
         return
     def decrypt(self, ciphertext: str, key: Any) -> str:
         return
     def validate_key(self, key: Any) -> bool:
         return key is None
-    
 
-class SteganographyCipher(Cipher):
+
+class SteganographyCipher(AbstractCipher):
     def encrypt(self, text: str, key: str) -> str:
         return
     def decrypt(self, ciphertext: str, key: str) -> str:
         return
-    def validate_key(self, key: str) -> bool:
-        return isinstance(key, str)
+    def validate_key(self, key: Any) -> bool:
+        return isinstance(key, str) and os.path.exists(key) and key.lower().endswith(('.png', '.jpg', '.jpeg'))
 
