@@ -102,13 +102,15 @@ class VigenereCipher(Cipher):
 
 class Base64Cipher(Cipher):
     def encrypt(self, text: str, key: str) -> str:
-        return
+        bytes = text_to_bytes(text)
+        return base64.b64encode(bytes).decode('utf-8')
 
     def decrypt(self, ciphertext: str, key: str) -> str:
-        return 
+        bytes_data = base64.b64decode(ciphertext)
+        return bytes_to_text(bytes_data)
 
     def validate_key(self, key: Any) -> bool:
-        return isinstance(key, None) 
+        return key is None
 
 class SteganographyCipher(Cipher):
     def encrypt(self, text: str, key: str) -> str:
