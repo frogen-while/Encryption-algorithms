@@ -1,10 +1,17 @@
 from abc import ABC, abstractmethod
-from cryptography.hazmat.primitives.asymmetric import rsa, ec
+from cryptography.hazmat.primitives.asymmetric import rsa, ec, padding
+from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives import serialization 
 import os
 from PIL import Image
 from typing import Any
+import base64
 
+def text_to_bytes(text: str) -> bytes:
+    return text.encode('utf-8')
+
+def bytes_to_text(data: bytes) -> str:
+    return data.decode('utf-8')
 
 class Cipher(ABC):
     @abstractmethod
@@ -19,43 +26,52 @@ class Cipher(ABC):
     def validate_key(self, key: Any) -> bool:
         raise NotImplementedError("This method should be overridden by subclasses")
 
-class AbstractCipher(Cipher):
-
-    def text_to_bytes(self, text: str) -> bytes:
-        return text.encode('utf-8')
-    
-    def bytes_to_text(self, data: bytes) -> str:
-        return data.decode('utf-8')
     
 
 class KeyManager:
-    def generate_RSA_keys(self):
+    def generate_RSA_keys(self) -> tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey]:
+        private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        public_key = private_key.public_key()
         return private_key, public_key
-    def generate_ECC_keys(self):
+
+    def generate_ECC_keys(self) -> tuple[ec.EllipticCurvePrivateKey, ec.EllipticCurvePublicKey]:
+        private_key = ec.generate_private_key(ec.SECP256R1())
+        public_key = private_key.public_key()
         return private_key, public_key
 
-class CipherRSA(AbstractCipher):
-
-    def encrypt(self, text: str, public_key: rsa.RSAPublicKey) -> bytes:
-        return
-
-    def decrypt(self, ciphertext: bytes, private_key: rsa.RSAPrivateKey) -> str:
-        return
+class CipherRSA(Cipher):
+    def encrypt(self, text: str, key: rsa.RSAPublicKey) -> bytes:
+        if not self.validate_key(key):
+            raise ValueError("Invalid key")
+        return key.encrypt(
+            text_to_bytes(text),
+            padding.OAEP(
+                mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                algorithm=hashes.SHA256(),
+                label=None
+            )
+        )
+    
+    def decrypt(self, ciphertext: bytes, key: rsa.RSAPrivateKey) -> str:
+        if not self.validate_key(key):
+            raise ValueError("Invalid key")
+        return bytes_to_text(key.decrypt(
+            ciphertext,
+            padding.OAEP(
+                mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                algorithm=hashes.SHA256(),
+                label=None
+            )
+        ))
     
     def validate_key(self, key: Any) -> bool:
         return isinstance(key, (rsa.RSAPublicKey, rsa.RSAPrivateKey))
 
 
-class CipherECC(AbstractCipher):
-
-    def encrypt(self, text: str, public_key: ec.ECPublicKey) -> bytes:
-        return
-
-    def decrypt(self, ciphertext: bytes, private_key: ec.ECPrivateKey) -> str:
-        return
+class CipherECC(Cipher):
 
     def validate_key(self, key: Any) -> bool:
-        return isinstance(key, (ec.ECPublicKey, ec.ECPrivateKey))
+        return isinstance(key, (ec.EllipticCurvePublicKey, ec.EllipticCurvePrivateKey))
 
 
 class CaesarCipher(Cipher):
@@ -83,20 +99,21 @@ class VigenereCipher(Cipher):
         return isinstance(key, str) and key and all(c.lower() in alphabet for c in key)
 
 
-class Base64Cipher(AbstractCipher):
-    def encrypt(self, text: str, key: Any) -> str:
+
+class Base64Cipher(Cipher):
+    def encrypt(self, text: str, key: str) -> str:
         return
-    def decrypt(self, ciphertext: str, key: Any) -> str:
-        return
+
+    def decrypt(self, ciphertext: str, key: str) -> str:
+        return 
+
     def validate_key(self, key: Any) -> bool:
-        return key is None
+        return isinstance(key, None) 
 
-
-class SteganographyCipher(AbstractCipher):
+class SteganographyCipher(Cipher):
     def encrypt(self, text: str, key: str) -> str:
         return
     def decrypt(self, ciphertext: str, key: str) -> str:
         return
     def validate_key(self, key: Any) -> bool:
         return isinstance(key, str) and os.path.exists(key) and key.lower().endswith(('.png', '.jpg', '.jpeg'))
-
