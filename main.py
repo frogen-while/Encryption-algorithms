@@ -1,10 +1,11 @@
 from abc import abstractmethod
 from cryptography.hazmat.primitives.asymmetric import rsa, ec, padding
-from cryptography.hazmat.primitives import hashes
-from steganocryptopy.steganography import Steganography as stego
+from cryptography.hazmat.primitives import hashes, serialization
+from stegano import lsb
 import os
-from typing import Any
+from typing import Any, Tuple, Literal, Union
 import base64
+import json
 
 def text_to_bytes(text: str) -> bytes:
     return text.encode('utf-8')
@@ -33,14 +34,87 @@ class Cipher:
     
 
 class KeyManager:
-    def generate_RSA_keys(self) -> tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey]:
-        private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-        public_key = private_key.public_key()
-        return private_key, public_key
 
-    def generate_ECC_keys(self) -> tuple[ec.EllipticCurvePrivateKey, ec.EllipticCurvePublicKey]:
+    def save_keys(self, name: str, type: Literal["RSA", "ECC"], private_key: Union[rsa.RSAPrivateKey, ec.EllipticCurvePrivateKey], public_key: Union[rsa.RSAPublicKey, ec.EllipticCurvePublicKey]) -> None:
+        private_pem = private_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.TraditionalOpenSSL,
+            encryption_algorithm=serialization.NoEncryption()
+        ).decode('utf-8')
+
+        public_pem = public_key.public_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo
+        ).decode('utf-8')
+        if type == "RSA":
+            try:
+                with open("keys_RSA.env", "r") as f:
+                    key_data = json.load(f)
+                if key_data is None:
+                    self.generate_RSA_keys(name = "Standard_key")
+            except (FileNotFoundError, json.JSONDecodeError):
+                key_data = {}
+
+            key_data.update({
+                name: {
+                    "type": "RSA",
+                    "private_key": private_pem,
+                    "public_key": public_pem
+                }
+            })
+
+            with open("keys_RSA.env", "w", encoding="utf-8") as f:
+                json.dump(key_data, f, indent=4)
+        elif type == "ECC":
+            try:
+                with open("keys_ECC.env", "r") as f:
+                    key_data = json.load(f)
+                if key_data is None:
+                    self.generate_ECC_keys(name = "Standard_key")
+
+            except (FileNotFoundError, json.JSONDecodeError):
+                key_data = {}
+
+            key_data.update({
+                name: {
+                    "type": "ECC",
+                    "private_key": private_pem,
+                    "public_key": public_pem
+                }
+            })
+
+            with open("keys_ECC.env", "w", encoding="utf-8") as f:
+                json.dump(key_data, f, indent=4)
+        else:
+            raise ValueError("Invalid key type. Use 'RSA' or 'ECC'.")
+        
+    def generate_RSA_keys(self, name) -> Tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey]:
+        private_key = rsa.generate_private_key(
+            public_exponent=65537,
+            key_size=2048
+        )
+        public_key = private_key.public_key()
+        return self.save_keys(name, "RSA", private_key, public_key)
+
+    def generate_ECC_keys(self, name) -> tuple[ec.EllipticCurvePrivateKey, ec.EllipticCurvePublicKey]:
         private_key = ec.generate_private_key(ec.SECP256R1())
         public_key = private_key.public_key()
+        return self.save_keys(name, "ECC", private_key, public_key)
+
+
+    def load_keys(self, name: str, type: Literal["RSA", "ECC"]) -> tuple[Any, Any]:
+        with open(f"keys_{type}.env", 'r') as f:
+            keys = json.load(f)
+        if not keys:
+            raise ValueError(f"No keys found for {type}")
+        if name not in keys:
+            raise ValueError(f"No keys found for {name}")
+        private_key = serialization.load_pem_private_key(
+            keys[name]["private_key"].encode('utf-8'), password=None
+        )
+        public_key = serialization.load_pem_public_key(
+            keys[name]["public_key"].encode('utf-8')
+        )
         return private_key, public_key
 
 class CipherRSA(Cipher):
@@ -75,6 +149,8 @@ class CipherRSA(Cipher):
 class CipherECC(Cipher):
     def validate_key(self, key: Any) -> bool:
         return isinstance(key, (ec.EllipticCurvePublicKey, ec.EllipticCurvePrivateKey))
+    
+    
 
 
 class CaesarCipher(Cipher):
@@ -187,16 +263,17 @@ class Base64Cipher(Cipher):
 
 class SteganographyCipher(Cipher):
     def encrypt(self, key: str) -> str:
-        stego.generate_key("secret_key")
-        secret = stego.encrypt("secret_key", key, "massage.txt")
+        if not self.validate_key(key):
+            raise ValueError("Invalid key")
+
+        secret = lsb.hide(key, "Hi there, this is a secret message!")
         secret.save("secret.png")
 
-    def decrypt(self, path_to_secret: str, key: str) -> str:
-        # if not self.validate_key(path_to_secret):
-        #     raise ValueError("Invalid key")
-        
-        return stego.decrypt("secret_key", path_to_secret)
+    def decrypt(self, path_to_secret: str) -> str:
+        if not self.validate_key(path_to_secret):
+            raise ValueError("Invalid key")
+        return lsb.reveal(path_to_secret)
 
-    # def validate_key(self, key: Any) -> bool:
-    #     return isinstance(key, str) and os.path.exists(key) and key.lower().endswith(('.png', '.jpg', '.jpeg'))
+    def validate_key(self, key: Any) -> bool:
+        return isinstance(key, str) and os.path.exists(key) and key.lower().endswith(('.png', '.jpg', '.jpeg'))
 
