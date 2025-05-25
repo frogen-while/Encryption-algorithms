@@ -1,11 +1,15 @@
 from abc import abstractmethod
 from cryptography.hazmat.primitives.asymmetric import rsa, ec, padding
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+from cryptography.hazmat.primitives.ciphers import algorithms, Cipher as CryptoCipher, modes
 from cryptography.hazmat.primitives import hashes, serialization
 from stegano import lsb
 import os
 from typing import Any, Tuple, Literal, Union
 import base64
 import json
+
+
 
 def text_to_bytes(text: str) -> bytes:
     return text.encode('utf-8')
@@ -88,19 +92,18 @@ class KeyManager:
         else:
             raise ValueError("Invalid key type. Use 'RSA' or 'ECC'.")
         
-    def generate_RSA_keys(self, name) -> Tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey]:
+    def generate_RSA_keys(self, name) -> None:
         private_key = rsa.generate_private_key(
             public_exponent=65537,
             key_size=2048
         )
         public_key = private_key.public_key()
-        return self.save_keys(name, "RSA", private_key, public_key)
+        self.save_keys(name, "RSA", private_key, public_key)
 
-    def generate_ECC_keys(self, name) -> tuple[ec.EllipticCurvePrivateKey, ec.EllipticCurvePublicKey]:
+    def generate_ECC_keys(self, name) -> None:
         private_key = ec.generate_private_key(ec.SECP256R1())
         public_key = private_key.public_key()
-        return self.save_keys(name, "ECC", private_key, public_key)
-
+        self.save_keys(name, "ECC", private_key, public_key)
 
     def load_keys(self, name: str, type: Literal["RSA", "ECC"]) -> tuple[Any, Any]:
         with open(f"keys_{type}.env", 'r') as f:
@@ -145,14 +148,62 @@ class CipherRSA(Cipher):
     def validate_key(self, key: Any) -> bool:
         return isinstance(key, (rsa.RSAPublicKey, rsa.RSAPrivateKey))
 
-
 class CipherECC(Cipher):
+    def __init__(self):
+        self.hkdf_length = 32 
+        self.nonce_length = 12  
+
+    def encrypt(self, text: str, key: ec.EllipticCurvePublicKey) -> Tuple[bytes, bytes, bytes, bytes]:
+        if not self.validate_key(key):
+            raise ValueError("Invalid public key")
+        
+        ephemeral_private_key = ec.generate_private_key(ec.SECP256R1())
+        ephemeral_public_key = ephemeral_private_key.public_key()
+        
+        shared_secret = ephemeral_private_key.exchange(ec.ECDH(), key)
+        
+        derived_key = HKDF(
+            algorithm=hashes.SHA256(),
+            length=self.hkdf_length,
+            salt=None,
+            info=b'handshake data',
+        ).derive(shared_secret)
+        
+        nonce = os.urandom(self.nonce_length)
+        
+        cipher = CryptoCipher(algorithms.AES(derived_key), modes.GCM(nonce))
+        encryptor = cipher.encryptor()
+        ciphertext = encryptor.update(text.encode('utf-8')) + encryptor.finalize()
+        tag = encryptor.tag
+
+        ephemeral_public_bytes = ephemeral_public_key.public_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo
+        )
+        return ciphertext, nonce, tag, ephemeral_public_bytes
+
+    def decrypt(self, ciphertext: Tuple[bytes, bytes, bytes, bytes], key: ec.EllipticCurvePrivateKey) -> str:
+        if not self.validate_key(key):
+            raise ValueError("Invalid private key")
+        ciphertext_data, nonce, tag, ephemeral_public_bytes = ciphertext
+        ephemeral_public_key = serialization.load_pem_public_key(ephemeral_public_bytes)
+        shared_secret = key.exchange(ec.ECDH(), ephemeral_public_key)
+        
+        derived_key = HKDF(
+            algorithm=hashes.SHA256(),
+            length=self.hkdf_length,
+            salt=None,
+            info=b'handshake data',
+        ).derive(shared_secret)
+        
+        cipher = CryptoCipher(algorithms.AES(derived_key), modes.GCM(nonce, tag))
+        decryptor = cipher.decryptor()
+        plaintext = decryptor.update(ciphertext_data) + decryptor.finalize()
+        
+        return plaintext.decode('utf-8')
+
     def validate_key(self, key: Any) -> bool:
         return isinstance(key, (ec.EllipticCurvePublicKey, ec.EllipticCurvePrivateKey))
-    
-    
-
-
 class CaesarCipher(Cipher):
 
     def encrypt(self, text: str, key: int) -> str:
@@ -262,18 +313,28 @@ class Base64Cipher(Cipher):
         return key is None
 
 class SteganographyCipher(Cipher):
-    def encrypt(self, key: str) -> str:
+    def encrypt(self, text: str, key: str, output_path: str = "secret_output.png") -> str:
         if not self.validate_key(key):
-            raise ValueError("Invalid key")
+            raise ValueError("Invalid image file")
+        try:
+            secret = lsb.hide(key, text)
+            secret.save(output_path)
+            return output_path
+        except Exception as e:
+            raise ValueError(f"Failed to hide message: {str(e)}")
 
-        secret = lsb.hide(key, "Hi there, this is a secret message!")
-        secret.save("secret.png")
-
-    def decrypt(self, path_to_secret: str) -> str:
-        if not self.validate_key(path_to_secret):
-            raise ValueError("Invalid key")
-        return lsb.reveal(path_to_secret)
+    def decrypt(self, ciphertext: str, key: Any = None) -> str:
+        if not self.validate_key(ciphertext):
+            raise ValueError("Invalid image file")
+        try:
+            return lsb.reveal(ciphertext)
+        except Exception as e:
+            raise ValueError(f"Failed to reveal message: {str(e)}")
 
     def validate_key(self, key: Any) -> bool:
-        return isinstance(key, str) and os.path.exists(key) and key.lower().endswith(('.png', '.jpg', '.jpeg'))
+        return (isinstance(key, str) and
+                os.path.exists(key) and
+                key.lower().endswith(('.png', '.jpg', '.jpeg')))
+    
+
 
