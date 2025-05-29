@@ -1,7 +1,0 @@
-test.py
-*.jpg
-*.png
-*.jpeg
-*.env
-*.txt
-.DS_Store
