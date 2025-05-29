@@ -92,18 +92,25 @@ class KeyManager:
         else:
             raise ValueError("Invalid key type. Use 'RSA' or 'ECC'.")
         
-    def generate_RSA_keys(self, name) -> None:
+    def generate_RSA_keys(self, name) -> Tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey]:
         private_key = rsa.generate_private_key(
             public_exponent=65537,
             key_size=2048
         )
         public_key = private_key.public_key()
         self.save_keys(name, "RSA", private_key, public_key)
+        if __name__ != "__main__":
+            return private_key, public_key
+        
 
-    def generate_ECC_keys(self, name) -> None:
+    def generate_ECC_keys(self, name) -> Tuple[ec.EllipticCurvePrivateKey, ec.EllipticCurvePublicKey]:
+        if not name:
+            raise ValueError("Name must be provided for ECC key generation")
         private_key = ec.generate_private_key(ec.SECP256R1())
         public_key = private_key.public_key()
         self.save_keys(name, "ECC", private_key, public_key)
+        if __name__ != "__main__":
+            return private_key, public_key
 
     def load_keys(self, name: str, type: Literal["RSA", "ECC"]) -> tuple[Any, Any]:
         with open(f"keys_{type}.env", 'r') as f:
@@ -335,6 +342,3 @@ class SteganographyCipher(Cipher):
         return (isinstance(key, str) and
                 os.path.exists(key) and
                 key.lower().endswith(('.png', '.jpg', '.jpeg')))
-    
-
-
