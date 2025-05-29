@@ -1,5 +1,5 @@
 from abc import abstractmethod
-from cryptography.hazmat.primitives.asymmetric import rsa, ec, padding
+from cryptography.hazmat.primitives.asymmetric import rsa, ec, padding 
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.hazmat.primitives.ciphers import algorithms, Cipher as CryptoCipher, modes
 from cryptography.hazmat.primitives import hashes, serialization
@@ -8,7 +8,6 @@ import os
 from typing import Any, Tuple, Literal, Union
 import base64
 import json
-
 
 
 def text_to_bytes(text: str) -> bytes:
@@ -36,7 +35,7 @@ class Cipher:
         raise NotImplementedError("This method should be overridden by subclasses")
 
     
-
+ 
 class KeyManager:
 
     def save_keys(self, name: str, type: Literal["RSA", "ECC"], private_key: Union[rsa.RSAPrivateKey, ec.EllipticCurvePrivateKey], public_key: Union[rsa.RSAPublicKey, ec.EllipticCurvePublicKey]) -> None:
@@ -278,7 +277,6 @@ class VigenereCipher(Cipher):
         text_numbers = text_to_number(ciphertext)
         key_numbers = text_to_number(key)
 
-
         key_repeated = key_numbers * (len(text_numbers) // len(key_numbers) + 1)
         for i in range(len(key_repeated)):
             key_repeated[i] = f"{key_repeated[i]}"
@@ -342,3 +340,14 @@ class SteganographyCipher(Cipher):
         return (isinstance(key, str) and
                 os.path.exists(key) and
                 key.lower().endswith(('.png', '.jpg', '.jpeg')))
+    
+if __name__ == "__main__":
+    key_manager = KeyManager()
+    private_RSA_key, public_RSA_key = key_manager.load_keys("Standard_RSA_key", 'RSA')
+    cipher_RS = CipherRSA()
+    with open("tests/data/message_100.txt", "r") as f:
+        message = f.read()
+    encrypted_message = cipher_RS.encrypt(message, public_RSA_key)
+    print("Encrypted:", encrypted_message)
+    decrypted_message = cipher_RS.decrypt(encrypted_message, private_RSA_key)
+    print("Decrypted:", decrypted_message)
