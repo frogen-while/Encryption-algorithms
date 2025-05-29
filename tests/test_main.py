@@ -2,7 +2,11 @@ from cryptography.hazmat.primitives.asymmetric import rsa, ec
 from cryptography.hazmat.primitives import serialization
 import unittest
 import os
+from pathlib import Path
+import sys
+sys.path.append(str(Path(__file__).parent.parent))
 import main as Cipher
+
 
 ciphers_classes = [Cipher.VigenereCipher, Cipher.CaesarCipher, Cipher.CipherRSA, Cipher.CipherECC, Cipher.Base64Cipher, Cipher.SteganographyCipher]
 
@@ -57,6 +61,10 @@ class TestCiphers(unittest.TestCase):
         encrypted_message = cipher_RSA.encrypt(message, public_key)
         self.assertNotEqual(encrypted_message, message)
         self.assertEqual(cipher_RSA.decrypt(encrypted_message, private_key), message)
+        self.assertRaises(ValueError, cipher_RSA.decrypt, encrypted_message, None)
+        self.assertRaises(ValueError, cipher_RSA.encrypt, message, None)
+        self.assertRaises(ValueError, cipher_RSA.decrypt, encrypted_message, "invalid_key")
+        self.assertRaises(ValueError, cipher_RSA.encrypt, message, "invalid_key")
 
         private_key, public_key = key_manager.load_keys("Standard_ECC_key", "ECC")
 
@@ -64,6 +72,10 @@ class TestCiphers(unittest.TestCase):
         encrypted_message = cipher_ECC.encrypt(message, public_key)
         self.assertNotEqual(encrypted_message, message)
         self.assertEqual(cipher_ECC.decrypt(encrypted_message, private_key), message)
+        self.assertRaises(ValueError, cipher_ECC.decrypt, encrypted_message, None)
+        self.assertRaises(ValueError, cipher_ECC.encrypt, message, None)
+        self.assertRaises(ValueError, cipher_ECC.decrypt, encrypted_message, "invalid_key")
+        self.assertRaises(ValueError, cipher_ECC.encrypt, message, "invalid_key")
         for i in range(1,11,9):
             for j in range(100,600,200):
                 with open(f"tests/data/message_{i*j}.txt", "r") as f:
@@ -72,17 +84,29 @@ class TestCiphers(unittest.TestCase):
                 encrypted_message = cipher_Caesar.encrypt(message, 3)
                 self.assertNotEqual(encrypted_message, message)
                 self.assertEqual(cipher_Caesar.decrypt(encrypted_message, 3), message)
+                self.assertRaises(ValueError, cipher_Caesar.decrypt, encrypted_message, 0)
+                self.assertRaises(ValueError, cipher_Caesar.encrypt, message, 0)
+                self.assertRaises(ValueError, cipher_Caesar.decrypt, encrypted_message, 26)
+                self.assertRaises(ValueError, cipher_Caesar.encrypt, message, 26)
+
                 # Test Vigenere Cipher
                 encrypted_message = cipher_Vigenere.encrypt(message, "testkey")
                 self.assertNotEqual(encrypted_message, message)             
-                self.assertEqual(cipher_Vigenere.decrypt(encrypted_message, "testkey"), message.lower())    
+                self.assertEqual(cipher_Vigenere.decrypt(encrypted_message, "testkey"), message.lower())  
+                self.assertRaises(TypeError, cipher_Vigenere.decrypt, encrypted_message, 1234) 
                 # Test Base64 Cipher
                 encrypted_message = cipher_Base64.encrypt(message, None)
                 self.assertNotEqual(encrypted_message, message)  
                 self.assertEqual(cipher_Base64.decrypt(encrypted_message, None), message)
+                self.assertRaises(ValueError, cipher_Base64.decrypt, encrypted_message, "key")
+                self.assertRaises(ValueError, cipher_Base64.encrypt, message, "key")
                 # Test Steganography Cipher
                 encrypted_message = cipher_Steganography.encrypt(message, "tests/data/image.jpeg")
-                self.assertIsInstance(os.path.exists(encrypted_message))
                 decrypted_message = cipher_Steganography.decrypt(encrypted_message, "tests/data/image.jpeg")
+                self.assertTrue(os.path.exists(encrypted_message))
                 self.assertEqual(decrypted_message, message)
-                self.assertTrue(os.path.exists(decrypted_message))
+                self.assertRaises(ValueError, cipher_Steganography.decrypt, "not_a_valid_path_to_image")
+                self.assertRaises(ValueError, cipher_Steganography.encrypt, message, "not_a_valid_path_to_image")
+                self.assertRaises(ValueError, cipher_Steganography.decrypt, "tests/data/message_100.txt")
+if __name__ == "__main__":
+    unittest.main()
